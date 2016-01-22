@@ -1,91 +1,64 @@
 language: cpp
-
 sudo: false
-
 git:
   depth: 10
   submodules: true
-
 env:
   global:
-   - secure: "N3a5nzzsgpuu45k8qWdYsHNxrSnqeAGLTOYpfYoAH7B94vuf7pa7XV1tQjXbxrnx2D6ryTdtUtyRKwy7zXbwXxGt4DpczWEo8f6DUd6+obAp3kdnXABg2Sj4oA7KMs0F0CmoADy0jdUZD5YyOJHu64LCIIgzEQ9q49PFMNbU3IE="
-   - secure: "iQYPNpMtejcgYeUkWZGIWz1msIco5qydJrhZTSCQOYahAQerdT7q5WZEpEo3G6IWOGgO1eo7GFuY8DvqQjw1+jC9b9mhkRNdo3LhGTKS9Gsbl5Q27k0rjlaFZmmQHrfPlQJwhfAIp+KLugHtQw5bCoLh+95E3j0F0DayF1tuJ3s="
+  - secure: N3a5nzzsgpuu45k8qWdYsHNxrSnqeAGLTOYpfYoAH7B94vuf7pa7XV1tQjXbxrnx2D6ryTdtUtyRKwy7zXbwXxGt4DpczWEo8f6DUd6+obAp3kdnXABg2Sj4oA7KMs0F0CmoADy0jdUZD5YyOJHu64LCIIgzEQ9q49PFMNbU3IE=
+  - secure: iQYPNpMtejcgYeUkWZGIWz1msIco5qydJrhZTSCQOYahAQerdT7q5WZEpEo3G6IWOGgO1eo7GFuY8DvqQjw1+jC9b9mhkRNdo3LhGTKS9Gsbl5Q27k0rjlaFZmmQHrfPlQJwhfAIp+KLugHtQw5bCoLh+95E3j0F0DayF1tuJ3s=
 addons:
-  postgresql: "9.4"
+  postgresql: '9.4'
   apt:
     sources:
-     - ubuntu-toolchain-r-test
-     - llvm-toolchain-precise-3.5
+    - ubuntu-toolchain-r-test
+    - llvm-toolchain-precise-3.5
     packages:
-     - clang-3.5
-
+    - clang-3.5
 cache:
   directories:
   - $HOME/.ccache
-
 matrix:
   include:
-    - os: linux
-      compiler: clang
-      env: JOBS=8 MASON_PUBLISH=true
-    - os: linux
-      compiler: gcc
-      env: JOBS=6
-    - os: osx
-      compiler: clang
-      env: JOBS=8 MASON_PUBLISH=true
-    - os: osx
-      compiler: clang
-      env: JOBS=8 COVERAGE=true
-
+  - os: linux
+    compiler: clang
+    env: JOBS=8
 before_install:
- - export COVERAGE=${COVERAGE:-false}
- - export MASON_PUBLISH=${MASON_PUBLISH:-false}
- - if [[ ${TRAVIS_BRANCH} != 'master' ]]; then export MASON_PUBLISH=false; fi
- - if [[ ${TRAVIS_PULL_REQUEST} != 'false' ]]; then export MASON_PUBLISH=false; fi
-
+- export COVERAGE=${COVERAGE:-false}
+- export MASON_PUBLISH=${MASON_PUBLISH:-false}
+- if [[ ${TRAVIS_BRANCH} != 'master' ]]; then export MASON_PUBLISH=false; fi
+- if [[ ${TRAVIS_PULL_REQUEST} != 'false' ]]; then export MASON_PUBLISH=false; fi
 install:
- - if [[ $(uname -s) == 'Linux' ]]; then
-     export CXX="ccache clang++-3.5 -Qunused-arguments";
-     export CC="ccache clang-3.5 -Qunused-arguments";
-     export PYTHONPATH=$(pwd)/mason_packages/.link/lib/python2.7/site-packages;
-   else
-     brew rm postgis --force;
-     brew install postgis --force;
-     pg_ctl -w start -l postgres.log --pgdata /usr/local/var/postgres;
-     createuser -s postgres;
-     export PYTHONPATH=$(pwd)/mason_packages/.link/lib/python/site-packages;
-   fi
- - psql -c 'create database template_postgis;' -U postgres;
- - psql -c 'create extension postgis;' -d template_postgis -U postgres;
- - if [[ ${COVERAGE} == true ]]; then
-     PYTHONUSERBASE=$(pwd)/mason_packages/.link pip install --user cpp-coveralls;
-   fi
-
+- if [[ $(uname -s) == 'Linux' ]]; then export CXX="ccache clang++-3.5 -Qunused-arguments";
+  export CC="ccache clang-3.5 -Qunused-arguments"; export PYTHONPATH=$(pwd)/mason_packages/.link/lib/python2.7/site-packages;
+  else brew rm postgis --force; brew install postgis --force; pg_ctl -w start -l postgres.log
+  --pgdata /usr/local/var/postgres; createuser -s postgres; export PYTHONPATH=$(pwd)/mason_packages/.link/lib/python/site-packages;
+  fi
+- psql -c 'create database template_postgis;' -U postgres;
+- psql -c 'create extension postgis;' -d template_postgis -U postgres;
+- if [[ ${COVERAGE} == true ]]; then PYTHONUSERBASE=$(pwd)/mason_packages/.link pip
+  install --user cpp-coveralls; fi
 script:
- - source bootstrap.sh
- - if [[ ${COVERAGE} == true ]]; then
-     ./configure CUSTOM_LDFLAGS='--coverage' CUSTOM_CXXFLAGS='--coverage' CUSTOM_CFLAGS='--coverage' DEBUG=True;
-   elif [[ ${MASON_PUBLISH} == true ]]; then
-     export MASON_NAME=mapnik;
-     export MASON_VERSION=latest;
-     export MASON_LIB_FILE=lib/libmapnik-wkt.a;
-     source ./.mason/mason.sh;
-     ./configure PREFIX=${MASON_PREFIX} PATH_REPLACE='' MAPNIK_BUNDLED_SHARE_DIRECTORY=True RUNTIME_LINK='static';
-   else
-     ./configure;
-   fi
- - make
- - make test || TEST_RESULT=$?
- - if [[ ${COVERAGE} == true ]]; then
-     ./mason_packages/.link/bin/cpp-coveralls --build-root . --gcov-options '\-lp' --exclude mason_packages --exclude .sconf_temp --exclude benchmark --exclude deps --exclude scons --exclude test --exclude demo --exclude docs --exclude fonts --exclude utils > /dev/null; 
-   fi
- - if [[ ${COVERAGE} != true ]]; then
-     make bench;
-   fi
- - if [[ ${TEST_RESULT:-0} != 0 ]]; then exit $TEST_RESULT ; fi;
- - if [[ ${MASON_PUBLISH} == true ]]; then
-     ./mason_latest.sh build;
-     ./mason_latest.sh link;
-     ./mason_latest.sh publish;
-   fi
+- source bootstrap.sh
+- if [[ ${COVERAGE} == true ]]; then ./configure CUSTOM_LDFLAGS='--coverage' CUSTOM_CXXFLAGS='--coverage'
+  CUSTOM_CFLAGS='--coverage' DEBUG=True; elif [[ ${MASON_PUBLISH} == true ]]; then
+  export MASON_NAME=mapnik; export MASON_VERSION=latest; export MASON_LIB_FILE=lib/libmapnik-wkt.a;
+  source ./.mason/mason.sh; ./configure PREFIX=${MASON_PREFIX} PATH_REPLACE='' MAPNIK_BUNDLED_SHARE_DIRECTORY=True
+  RUNTIME_LINK='static'; else ./configure; fi
+- make
+- make test || TEST_RESULT=$?
+- if [[ ${COVERAGE} == true ]]; then ./mason_packages/.link/bin/cpp-coveralls --build-root
+  . --gcov-options '\-lp' --exclude mason_packages --exclude .sconf_temp --exclude
+  benchmark --exclude deps --exclude scons --exclude test --exclude demo --exclude
+  docs --exclude fonts --exclude utils > /dev/null; fi
+- if [[ ${COVERAGE} != true ]]; then make bench; fi
+- if [[ ${TEST_RESULT:-0} != 0 ]]; then exit $TEST_RESULT ; fi;
+- if [[ ${MASON_PUBLISH} == true ]]; then ./mason_latest.sh build; ./mason_latest.sh
+  link; ./mason_latest.sh publish; fi
+deploy:
+  skip_cleanup: true
+  provider: gcs
+  access_key_id: GOOGXND2RV7SZYAV47VG
+  bucket: GCS Bucket
+  secret_access_key:
+    secure: H2P7MqM9t/VUUh33rhukDrYyH+4SKwQ7DXAfOV84FRL3kxlxT5jIWS9SeZPp5cPiOe1l4tZfJXD5lupRzPDHt5E20CrUQ5R9DRK5Lg0rGaqTsCVvrJHq++eeZ7OcIKrpweOZBCd8iKnVcJ1SEE9P9AgZepcKc6o8WmWjlT3ymtBjrKFspAGIjisDyEhtztjMRCXFCUwUlm9rMolO9vPchI3LR7b/h6FTfleA2FMLwpshg6tkuLaQOpRdgV7yffa0+DLamzbzmbLwzv1cNUij4KshzrKasuLSjsiouIOeUke9bdzy+8voMBUnA6dZLoEXUHe4Z6V2jIXuOfpJlX9JztPjYt6+o5Da2+Twj9QbghaQT5Jv6q2OrQqYzupVdhprvWIrAKoE4a/PJkyUdgEb2AEoThzFQlmqqrq9SUHAGrC8oQMY84Q9oX+inSGzTd+XTy5gN9PkAkZB7bWCONSdN8F+gWGUbDmYfz0eAsTLQDgwr/VLnTmK0zJjZwngfeUzuEOh8g/BULQheabS5+MbSSDtDOLDBNytKaTeeE7YUvBnDoRxk/h67H7IpWBjlGy0V4PTXduvQKdWGqqEEHUK+jktm1s72n7HqSzjP2hs0PDjJJyWuvz0MOw8ZP3Aw+mWK6BtU4wWfTwm7iRuOXz8ZxCvIY/4jIyYDA914aleQyo=
